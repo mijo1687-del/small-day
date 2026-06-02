@@ -38,7 +38,7 @@ function init() {
 }
 
 function loadLocalState() {
-  state.expenses = readJson(STORAGE_KEYS.expenses, []);
+  state.expenses = normalizeExpenses(readJson(STORAGE_KEYS.expenses, []));
   state.workTypes = readJson(STORAGE_KEYS.workTypes, []);
   state.partners = readJson(STORAGE_KEYS.partners, []);
   state.sites = readJson(STORAGE_KEYS.sites, []);
@@ -185,6 +185,29 @@ function buildExpenseFromForm(existingId) {
     수정일시: existingId ? new Date().toISOString() : "",
     삭제여부: "N"
   };
+}
+
+function normalizeExpenses(expenses) {
+  return expenses.map((item) => normalizeExpense(item));
+}
+
+function normalizeExpense(item) {
+  const normalized = { ...item };
+  normalized.지출일자 = normalizeSheetDate(normalized.지출일자);
+  normalized.입력일시 = typeof normalized.입력일시 === "string" ? normalized.입력일시 : String(normalized.입력일시 || "");
+  normalized.수정일시 = typeof normalized.수정일시 === "string" ? normalized.수정일시 : String(normalized.수정일시 || "");
+  const date = new Date(`${normalized.지출일자}T00:00:00`);
+  if (normalized.지출일자 && !Number.isNaN(date.getTime())) {
+    normalized.연도 = date.getFullYear();
+    normalized.월 = date.getMonth() + 1;
+    normalized.주차 = getMondayWeekLabel(date);
+    normalized.요일 = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  }
+  normalized.금액_부가세제외 = Number(normalized.금액_부가세제외 || 0);
+  normalized.부가세 = Number(normalized.부가세 || Math.round(normalized.금액_부가세제외 * 0.1));
+  normalized.합계금액 = Number(normalized.합계금액 || normalized.금액_부가세제외 + normalized.부가세);
+  normalized.삭제여부 = normalized.삭제여부 || "N";
+  return normalized;
 }
 
 function editExpense(id) {
@@ -540,7 +563,7 @@ async function syncFromServer(showMessage) {
   }
   try {
     const data = await requestServer("getData", {});
-    if (data.expenses) state.expenses = data.expenses;
+    if (data.expenses) state.expenses = normalizeExpenses(data.expenses);
     if (data.workTypes) state.workTypes = data.workTypes.map((item, index) => ({ name: item.공종명 || item.name, active: item.사용여부 || "Y", order: item.정렬순서 || index + 1, site: item.현장명 || item.site || "" }));
     if (data.partners) state.partners = data.partners.map((item) => ({ name: item.이름 || item.name, type: item.기본구분 || item.type, recent: item.최근사용일 || item.recent, count: item.사용횟수 || item.count || 0 }));
     if (data.sites) state.sites = data.sites.map((item, index) => ({ name: item.현장명 || item.name, active: item.사용여부 || "Y", order: item.정렬순서 || index + 1 }));
@@ -755,7 +778,7 @@ function saveSettings() {
 }
 
 function persistLocal() {
-  localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(state.expenses));
+  localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(normalizeExpenses(state.expenses)));
   localStorage.setItem(STORAGE_KEYS.workTypes, JSON.stringify(state.workTypes));
   localStorage.setItem(STORAGE_KEYS.partners, JSON.stringify(state.partners));
   localStorage.setItem(STORAGE_KEYS.sites, JSON.stringify(state.sites));
@@ -943,6 +966,21 @@ function toDateInput(date) {
   const d = new Date(date);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 10);
+}
+
+function normalizeSheetDate(value) {
+  if (!value) return "";
+  if (value instanceof Date) return toDateInput(value);
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoMatch) {
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) return toDateInput(parsed);
+    return isoMatch[1];
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? text.slice(0, 10) : toDateInput(parsed);
 }
 
 function getWeekRange(date) {

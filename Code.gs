@@ -245,9 +245,19 @@ function getObjects_(sheetName) {
   const headers = values[0];
   return values.slice(1).filter((row) => row.some((cell) => cell !== '')).map((row) => {
     const obj = {};
-    headers.forEach((header, index) => obj[header] = row[index]);
+    headers.forEach((header, index) => obj[header] = normalizeCell_(header, row[index]));
     return obj;
   });
+}
+
+function normalizeCell_(header, value) {
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    if (header === '지출일자' || header === '최근사용일') {
+      return Utilities.formatDate(value, 'Asia/Seoul', 'yyyy-MM-dd');
+    }
+    return Utilities.formatDate(value, 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
+  }
+  return value;
 }
 
 function findRowById_(sheet, id) {
