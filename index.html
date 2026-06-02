@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>현장 지출내역서 및 정산서</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">현장 지출 관리</p>
+      <h1>지출내역서 및 정산서</h1>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel site-panel">
+      <div class="section-title">
+        <h2>현장 선택</h2>
+      </div>
+      <div class="site-control-grid">
+        <select id="currentSiteMain"></select>
+        <button id="addCurrentSiteButton" class="small-button" type="button">현장 추가</button>
+        <button id="deleteCurrentSiteButton" class="small-button danger-button" type="button">현장 삭제</button>
+        <button id="syncButton" class="small-button" type="button">불러오기</button>
+      </div>
+      <div id="siteAddPanel" class="add-panel site-add-panel" hidden>
+        <input id="quickNewSiteName" placeholder="추가할 현장명">
+        <div class="add-panel-actions">
+          <button id="confirmAddSiteButton" class="primary-button" type="button">현장 추가</button>
+          <button id="cancelAddSiteButton" class="secondary-button" type="button">취소</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-input" class="tab-panel active">
+      <form id="expenseForm" class="panel form-panel">
+        <input type="hidden" id="expenseId">
+        <div class="quick-row">
+          <label>
+            <span>지출일자</span>
+            <input id="expenseDate" name="expenseDate" type="date" required>
+          </label>
+          <label>
+            <span>지출구분</span>
+            <select id="expenseType" name="expenseType" required></select>
+          </label>
+        </div>
+
+        <label>
+          <span>공종</span>
+          <div class="inline-field">
+            <select id="workType" name="workType" required></select>
+            <button id="addWorkTypeButton" class="small-button" type="button">추가</button>
+            <button id="deleteWorkTypeButton" class="small-button danger-button" type="button">삭제</button>
+          </div>
+        </label>
+        <div id="workTypeAddPanel" class="add-panel" hidden>
+          <input id="quickNewWorkType" placeholder="추가할 공종명">
+          <div class="add-panel-actions">
+            <button id="confirmAddWorkTypeButton" class="primary-button" type="button">공종 추가</button>
+            <button id="cancelAddWorkTypeButton" class="secondary-button" type="button">취소</button>
+          </div>
+        </div>
+
+        <label>
+          <span>업체명 또는 성명</span>
+          <input id="partnerName" name="partnerName" list="partnerList" placeholder="노무비는 성명, 외주비는 업체명" autocomplete="off" required>
+          <datalist id="partnerList"></datalist>
+        </label>
+
+        <label>
+          <span>금액_부가세제외</span>
+          <input id="amount" name="amount" inputmode="numeric" placeholder="0" required>
+        </label>
+
+        <label>
+          <span>작업현황 및 메모</span>
+          <textarea id="memo" name="memo" rows="3" placeholder="예: 미장공사 3명, 자재 반입, 특이사항"></textarea>
+        </label>
+
+        <div class="quick-row">
+          <label>
+            <span>작성자</span>
+            <input id="writer" name="writer" placeholder="작성자">
+          </label>
+          <label>
+            <span>현장명</span>
+            <input id="siteName" name="siteName" placeholder="현장명">
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button id="saveButton" class="primary-button" type="submit">저장</button>
+          <button id="resetButton" class="secondary-button" type="button">새 입력</button>
+        </div>
+      </form>
+
+      <div class="summary-strip">
+        <div>
+          <span>오늘 합계</span>
+          <strong id="todayTotal">0원</strong>
+        </div>
+        <div>
+          <span>이번 주 합계</span>
+          <strong id="weekTotal">0원</strong>
+        </div>
+      </div>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>최근 입력</h2>
+          <span id="recentCount">0건</span>
+        </div>
+        <div id="recentList" class="compact-list"></div>
+      </section>
+
+    </section>
+
+    <section id="tab-dashboard" class="tab-panel">
+      <section class="dashboard-grid" id="dashboardCards"></section>
+      <section class="panel">
+        <div class="section-title">
+          <h2>월별 집계</h2>
+          <input id="dashboardMonth" type="month">
+        </div>
+        <div id="monthlyCards" class="mini-grid"></div>
+      </section>
+      <section class="panel">
+        <div class="section-title">
+          <h2>주간 집계</h2>
+          <input id="dashboardWeek" type="week">
+        </div>
+        <div id="weeklyCards" class="mini-grid"></div>
+      </section>
+      <section class="panel">
+        <div class="section-title">
+          <h2>일자별 집계</h2>
+          <input id="dashboardDay" type="date">
+        </div>
+        <div id="dailyCards" class="mini-grid"></div>
+      </section>
+    </section>
+
+    <section id="tab-search" class="tab-panel">
+      <section class="panel">
+        <div class="section-title">
+          <h2>조회 필터</h2>
+          <button id="clearFiltersButton" class="small-button" type="button">초기화</button>
+        </div>
+        <div class="filter-grid">
+          <label>
+            <span>기간</span>
+            <select id="periodType">
+              <option value="all">전체</option>
+              <option value="month">월별</option>
+              <option value="week">주간별</option>
+              <option value="day">일자별</option>
+              <option value="custom">직접 선택</option>
+            </select>
+          </label>
+          <label class="period-field" data-period="month">
+            <span>월</span>
+            <input id="filterMonth" type="month">
+          </label>
+          <label class="period-field" data-period="week">
+            <span>주간</span>
+            <input id="filterWeek" type="week">
+          </label>
+          <label class="period-field" data-period="day">
+            <span>일자</span>
+            <input id="filterDay" type="date">
+          </label>
+          <label class="period-field" data-period="custom">
+            <span>시작일</span>
+            <input id="filterStart" type="date">
+          </label>
+          <label class="period-field" data-period="custom">
+            <span>종료일</span>
+            <input id="filterEnd" type="date">
+          </label>
+          <label>
+            <span>지출구분</span>
+            <select id="filterType"></select>
+          </label>
+          <label>
+            <span>공종</span>
+            <select id="filterWorkType"></select>
+          </label>
+          <label>
+            <span>업체명/성명</span>
+            <input id="filterName" placeholder="검색어">
+          </label>
+          <label>
+            <span>최소금액</span>
+            <input id="filterMin" inputmode="numeric" placeholder="0">
+          </label>
+          <label>
+            <span>최대금액</span>
+            <input id="filterMax" inputmode="numeric" placeholder="0">
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>조회 결과</h2>
+          <strong id="filteredTotal">0원</strong>
+        </div>
+        <div id="breakdownCards" class="mini-grid"></div>
+        <div id="expenseList" class="expense-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>전용 조회</h2>
+        </div>
+        <div class="lookup-tabs">
+          <button class="lookup-tab active" data-lookup="work">공종별</button>
+          <button class="lookup-tab" data-lookup="company">업체별 외주비</button>
+          <button class="lookup-tab" data-lookup="person">성명별 노무비</button>
+        </div>
+        <label id="lookupWorkWrap">
+          <span>공종 선택</span>
+          <select id="lookupWorkType"></select>
+        </label>
+        <label id="lookupNameWrap" hidden>
+          <span id="lookupNameLabel">검색</span>
+          <input id="lookupName" list="partnerList" placeholder="이름 또는 업체명">
+        </label>
+        <div id="lookupResult"></div>
+      </section>
+    </section>
+
+    <section id="tab-report" class="tab-panel">
+      <section class="panel">
+        <div class="section-title">
+          <h2>PDF 정산서</h2>
+        </div>
+        <div class="filter-grid">
+          <label>
+            <span>양식</span>
+            <select id="reportType">
+              <option value="all">전체 지출내역서</option>
+              <option value="month">월별 정산서</option>
+              <option value="week">주간 정산서</option>
+              <option value="day">일자별 지출내역서</option>
+              <option value="work">공종별 지출내역서</option>
+              <option value="company">업체별 정산서</option>
+              <option value="person">성명별 노무비 내역서</option>
+            </select>
+          </label>
+          <label>
+            <span>월</span>
+            <input id="reportMonth" type="month">
+          </label>
+          <label>
+            <span>주간</span>
+            <input id="reportWeek" type="week">
+          </label>
+          <label>
+            <span>일자</span>
+            <input id="reportDay" type="date">
+          </label>
+          <label>
+            <span>공종</span>
+            <select id="reportWorkType"></select>
+          </label>
+          <label>
+            <span>업체명/성명</span>
+            <input id="reportName" list="partnerList" placeholder="검색어">
+          </label>
+          <label>
+            <span>작성자</span>
+            <input id="reportWriter" placeholder="작성자">
+          </label>
+          <label>
+            <span>현장명</span>
+            <input id="reportSiteName" placeholder="현장명">
+          </label>
+        </div>
+        <button id="pdfButton" class="primary-button wide" type="button">PDF 출력</button>
+      </section>
+    </section>
+
+    <section id="tab-settings" class="tab-panel">
+      <section class="panel">
+        <div class="section-title">
+          <h2>연동 설정</h2>
+        </div>
+        <label>
+          <span>Google Apps Script 웹앱 URL</span>
+          <input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+        </label>
+        <button id="saveSettingsButton" class="primary-button wide" type="button">설정 저장</button>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>현재 현장 공종</h2>
+          <button id="addSettingWorkTypeButton" class="small-button" type="button">추가</button>
+        </div>
+        <input id="newWorkType" placeholder="추가할 공종명">
+        <div id="workTypeManager" class="compact-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>거래처/성명 기준정보</h2>
+        </div>
+        <div id="partnerManager" class="compact-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="하단 메뉴">
+    <button class="nav-button active" data-tab="input" type="button"><span>＋</span>입력</button>
+    <button class="nav-button" data-tab="dashboard" type="button"><span>▦</span>대시보드</button>
+    <button class="nav-button" data-tab="search" type="button"><span>⌕</span>조회</button>
+    <button class="nav-button" data-tab="report" type="button"><span>▣</span>정산서</button>
+    <button class="nav-button" data-tab="settings" type="button"><span>⚙</span>설정</button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
