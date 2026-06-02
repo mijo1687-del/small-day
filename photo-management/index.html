@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>현장 사진관리대장</title>
+  <style>
+    :root {
+      --bg: #f4f7f8;
+      --panel: #fff;
+      --text: #172023;
+      --muted: #66757b;
+      --line: #d8e2e5;
+      --primary: #176b5d;
+      --primary-dark: #0f5146;
+      --danger: #b42318;
+      --soft: #eaf5f2;
+      --shadow: 0 8px 22px rgba(17, 35, 42, .08);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Malgun Gothic", sans-serif; }
+    button, input, select, textarea { font: inherit; }
+    button { min-height: 48px; border: 0; border-radius: 8px; padding: 0 14px; color: #fff; background: var(--primary); font-weight: 800; cursor: pointer; }
+    button:disabled { opacity: .65; cursor: wait; }
+    button.secondary { color: var(--text); background: #edf2f4; border: 1px solid var(--line); }
+    button.danger { color: var(--danger); background: #fff3f1; border: 1px solid #f0bbb4; }
+    button.small { min-height: 40px; padding: 0 10px; font-size: 13px; }
+    header { position: sticky; top: 0; z-index: 10; padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid var(--line); }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 18px; }
+    h3 { font-size: 15px; }
+    .eyebrow { color: var(--primary); font-size: 12px; font-weight: 900; margin-bottom: 3px; }
+    main { width: min(100%, 980px); margin: 0 auto; padding: 12px 12px 92px; display: grid; gap: 12px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; box-shadow: var(--shadow); }
+    .section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .grid { display: grid; gap: 10px; }
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    .grid.four { grid-template-columns: repeat(4, 1fr); }
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 800; }
+    input, select, textarea { width: 100%; min-height: 48px; border: 1px solid #cbd8dc; border-radius: 8px; padding: 10px 12px; background: #fbfcfd; color: var(--text); }
+    textarea { min-height: 78px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(23, 107, 93, .14); }
+    .category-grid, .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .category-button.active { background: var(--primary-dark); }
+    .view { display: none; }
+    .view.active { display: grid; gap: 12px; }
+    .hidden-file { display: none; }
+    .photo-list { display: grid; gap: 12px; }
+    .photo-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+    .photo-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #dfe8eb; }
+    .photo-card .body { display: grid; gap: 10px; padding: 12px; }
+    .photo-card .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .empty { padding: 18px; border: 1px dashed #b8c7cc; border-radius: 8px; color: var(--muted); text-align: center; background: #fbfcfd; }
+    .loading { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(9, 25, 29, .48); color: #fff; font-weight: 900; }
+    .loading.show { display: flex; }
+    .toast { position: fixed; right: 14px; bottom: 84px; left: 14px; z-index: 60; display: none; padding: 13px 14px; border-radius: 8px; color: #fff; background: rgba(12, 29, 33, .94); text-align: center; font-weight: 800; }
+    .toast.show { display: block; }
+    .result-box { display: grid; gap: 8px; }
+    .pdf-item { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; }
+    .pdf-meta { color: var(--muted); font-size: 13px; }
+    .pdf-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .status { padding: 10px 12px; border-radius: 8px; color: var(--primary-dark); background: var(--soft); font-weight: 800; }
+    .bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; grid-template-columns: repeat(3, 1fr); background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -8px 22px rgba(17,35,42,.08); }
+    .nav-button { min-height: 68px; color: var(--muted); background: #fff; border-radius: 0; font-size: 13px; }
+    .nav-button.active { color: var(--primary); background: #f1f7f5; }
+    @media (min-width: 760px) {
+      .photo-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .category-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 520px) {
+      .grid.two, .grid.four, .action-grid, .pdf-actions { grid-template-columns: 1fr; }
+      .section-title { align-items: stretch; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">현장 사진관리</p>
+    <h1>사진관리대장</h1>
+  </header>
+
+  <main>
+    <section id="mainView" class="view active">
+      <section class="panel grid">
+        <div class="grid two">
+          <label>현장명<input id="siteName" placeholder="현장명"></label>
+          <label>시공사<input id="contractor" placeholder="시공사"></label>
+          <label>작성자<input id="writer" placeholder="작성자"></label>
+          <label>작성일<input id="mainDate" type="date"></label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title"><h2>카테고리 선택</h2></div>
+        <div class="category-grid">
+          <button class="category-button" data-category="TBM">TBM</button>
+          <button class="category-button" data-category="현장시공">현장시공</button>
+          <button class="category-button" data-category="안전관리">안전관리</button>
+          <button class="category-button" data-category="환경관리">환경관리</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title"><h2>사진 입력</h2><strong id="categoryLabel">카테고리 미선택</strong></div>
+        <div class="action-grid">
+          <button id="cameraButton" type="button">사진찍기</button>
+          <button id="galleryButton" class="secondary" type="button">사진 불러오기</button>
+        </div>
+        <input id="cameraInput" class="hidden-file" type="file" accept="image/*" capture="environment">
+        <input id="galleryInput" class="hidden-file" type="file" accept="image/*" multiple>
+      </section>
+
+      <section class="panel">
+        <div class="section-title"><h2>선택된 사진</h2><span id="photoCount">0장</span></div>
+        <div id="photoList" class="photo-list empty">사진을 선택하면 입력 카드가 표시됩니다.</div>
+      </section>
+
+      <button id="saveButton" type="button">저장 및 PDF 생성</button>
+      <section id="saveResult" class="panel result-box" hidden></section>
+    </section>
+
+    <section id="listView" class="view">
+      <section class="panel">
+        <div class="section-title"><h2>사진대장 목록</h2><button id="searchPdfButton" class="small" type="button">조회</button></div>
+        <div class="grid four">
+          <label>카테고리<select id="filterCategory"></select></label>
+          <label>현장명<input id="filterSiteName" placeholder="현장명"></label>
+          <label>날짜<input id="filterDate" type="date"></label>
+          <label>삭제 포함
+            <select id="includeDeleted">
+              <option value="false">미포함</option>
+              <option value="true">포함</option>
+            </select>
+          </label>
+        </div>
+      </section>
+      <section class="panel result-box" id="pdfList">조회 결과가 표시됩니다.</section>
+    </section>
+
+    <section id="settingsView" class="view">
+      <section class="panel grid">
+        <div class="section-title"><h2>기준정보 설정</h2><button id="saveSettingsButton" class="small" type="button">저장</button></div>
+        <label>Google Apps Script 웹앱 URL<input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec"></label>
+        <button id="setupButton" class="secondary" type="button">시트/폴더 초기화</button>
+        <p class="status">GitHub Pages에서 사용하려면 Apps Script 웹앱 URL을 저장하세요.</p>
+      </section>
+    </section>
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-button active" data-view="mainView">입력</button>
+    <button class="nav-button" data-view="listView">사진대장 목록</button>
+    <button class="nav-button" data-view="settingsView">설정</button>
+  </nav>
+
+  <div id="loading" class="loading">저장중입니다...</div>
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const CATEGORIES = ["TBM", "현장시공", "안전관리", "환경관리"];
+    const SIMPLE_CATEGORIES = ["TBM", "안전관리", "환경관리"];
+    const STORAGE = {
+      apiUrl: "photoBook.apiUrl",
+      siteName: "photoBook.siteName",
+      contractor: "photoBook.contractor",
+      writer: "photoBook.writer"
+    };
+    const state = { category: "", photos: [], saving: false };
+    const $ = (selector) => document.querySelector(selector);
+    const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+    document.addEventListener("DOMContentLoaded", init);
+
+    function init() {
+      setDefaults();
+      bindEvents();
+      renderCategoryOptions();
+      renderPhotos();
+    }
+
+    function setDefaults() {
+      $("#mainDate").value = today();
+      $("#siteName").value = localStorage.getItem(STORAGE.siteName) || "";
+      $("#contractor").value = localStorage.getItem(STORAGE.contractor) || "";
+      $("#writer").value = localStorage.getItem(STORAGE.writer) || "";
+      $("#apiUrl").value = localStorage.getItem(STORAGE.apiUrl) || "";
+    }
+
+    function bindEvents() {
+      $$(".nav-button").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view)));
+      $$(".category-button").forEach((button) => button.addEventListener("click", () => selectCategory(button.dataset.category)));
+      $("#cameraButton").addEventListener("click", () => $("#cameraInput").click());
+      $("#galleryButton").addEventListener("click", () => $("#galleryInput").click());
+      $("#cameraInput").addEventListener("change", handleFiles);
+      $("#galleryInput").addEventListener("change", handleFiles);
+      $("#saveButton").addEventListener("click", savePhotos);
+      $("#searchPdfButton").addEventListener("click", loadPdfList);
+      $("#saveSettingsButton").addEventListener("click", saveSettings);
+      $("#setupButton").addEventListener("click", setupBackend);
+      ["siteName", "contractor", "writer"].forEach((id) => $("#" + id).addEventListener("change", saveHeaderLocal));
+    }
+
+    function showView(viewId) {
+      $$(".view").forEach((view) => view.classList.toggle("active", view.id === viewId));
+      $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.view === viewId));
+      if (viewId === "listView") loadPdfList();
+    }
+
+    function selectCategory(category) {
+      state.category = category;
+      $$(".category-button").forEach((button) => button.classList.toggle("active", button.dataset.category === category));
+      $("#categoryLabel").textContent = category;
+      state.photos.forEach((photo) => photo.category = category);
+      renderPhotos();
+    }
+
+    function renderCategoryOptions() {
+      $("#filterCategory").innerHTML = `<option value="">전체</option>` + CATEGORIES.map((category) => `<option value="${category}">${category}</option>`).join("");
+    }
+
+    async function handleFiles(event) {
+      if (!state.category) {
+        toast("카테고리를 먼저 선택해 주세요.");
+        event.target.value = "";
+        return;
+      }
+      const files = Array.from(event.target.files || []);
+      for (const file of files) {
+        const resized = await resizeImage(file);
+        state.photos.push({
+          id: crypto.randomUUID ? crypto.randomUUID() : `P-${Date.now()}-${Math.random()}`,
+          category: state.category,
+          fileName: file.name.replace(/\.[^.]+$/, ".jpg"),
+          dataUrl: resized.dataUrl,
+          base64: resized.base64,
+          mimeType: "image/jpeg",
+          date: $("#mainDate").value || today(),
+          workType: "",
+          location: "",
+          content: ""
+        });
+      }
+      event.target.value = "";
+      renderPhotos();
+    }
+
+    function renderPhotos() {
+      $("#photoCount").textContent = `${state.photos.length}장`;
+      if (!state.photos.length) {
+        $("#photoList").className = "photo-list empty";
+        $("#photoList").textContent = "사진을 선택하면 입력 카드가 표시됩니다.";
+        return;
+      }
+      $("#photoList").className = "photo-list";
+      $("#photoList").innerHTML = state.photos.map((photo, index) => renderPhotoCard(photo, index)).join("");
+    }
+
+    function renderPhotoCard(photo, index) {
+      const isBuild = photo.category === "현장시공";
+      return `
+        <article class="photo-card">
+          <img src="${photo.dataUrl}" alt="선택 사진 ${index + 1}">
+          <div class="body">
+            <div class="card-head">
+              <strong>${index + 1}. ${photo.category}</strong>
+              <button class="danger small" type="button" onclick="removePhoto('${photo.id}')">삭제</button>
+            </div>
+            ${isBuild ? `
+              <label>공종<input value="${escapeHtml(photo.workType)}" oninput="updatePhoto('${photo.id}', 'workType', this.value)" placeholder="예: 미장공사"></label>
+              <label>부위<input value="${escapeHtml(photo.location)}" oninput="updatePhoto('${photo.id}', 'location', this.value)" placeholder="예: 1층 복도"></label>
+            ` : ""}
+            <label>일시<input type="date" value="${photo.date}" onchange="updatePhoto('${photo.id}', 'date', this.value)"></label>
+            <label>내용<textarea rows="2" oninput="updatePhoto('${photo.id}', 'content', this.value)" placeholder="내용을 입력하세요">${escapeHtml(photo.content)}</textarea></label>
+          </div>
+        </article>
+      `;
+    }
+
+    window.updatePhoto = function(id, key, value) {
+      const photo = state.photos.find((item) => item.id === id);
+      if (photo) photo[key] = value;
+    };
+
+    window.removePhoto = function(id) {
+      state.photos = state.photos.filter((item) => item.id !== id);
+      renderPhotos();
+    };
+
+    async function resizeImage(file) {
+      const bitmap = await createImageBitmap(file);
+      const max = 1600;
+      const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+      return { dataUrl, base64: dataUrl.split(",")[1] };
+    }
+
+    async function savePhotos() {
+      if (state.saving) return;
+      if (!validateBase()) return;
+      if (!state.category) return toast("카테고리를 선택해 주세요.");
+      if (!state.photos.length) return toast("사진을 먼저 선택해 주세요.");
+      const invalid = state.photos.find((photo) => !photo.content || !photo.date || (photo.category === "현장시공" && (!photo.workType || !photo.location)));
+      if (invalid) return toast("사진별 필수 입력값을 확인해 주세요.");
+      if (!confirm("사진을 저장하시겠습니까?")) return;
+      state.saving = true;
+      $("#saveButton").disabled = true;
+      showLoading(true);
+      try {
+        const payload = {
+          siteName: $("#siteName").value.trim(),
+          contractor: $("#contractor").value.trim(),
+          writer: $("#writer").value.trim(),
+          category: state.category,
+          photos: state.photos.map((photo) => ({
+            clientId: photo.id,
+            fileName: photo.fileName,
+            mimeType: photo.mimeType,
+            base64: photo.base64,
+            date: photo.date,
+            workType: photo.category === "현장시공" ? photo.workType : "",
+            location: photo.category === "현장시공" ? photo.location : "",
+            content: photo.content
+          }))
+        };
+        const result = await api("savePhotoBook", payload);
+        state.photos = [];
+        renderPhotos();
+        renderSaveResult(result);
+        toast("저장 및 PDF 생성이 완료되었습니다.");
+      } catch (error) {
+        toast(error.message || "저장에 실패했습니다.");
+      } finally {
+        state.saving = false;
+        $("#saveButton").disabled = false;
+        showLoading(false);
+      }
+    }
+
+    function validateBase() {
+      if (!$("#siteName").value.trim()) return toast("현장명을 입력해 주세요."), false;
+      if (!$("#contractor").value.trim()) return toast("시공사를 입력해 주세요."), false;
+      if (!$("#writer").value.trim()) return toast("작성자를 입력해 주세요."), false;
+      saveHeaderLocal();
+      return true;
+    }
+
+    function renderSaveResult(result) {
+      $("#saveResult").hidden = false;
+      $("#saveResult").innerHTML = `
+        <strong>PDF 생성 완료</strong>
+        <div class="pdf-meta">${escapeHtml(result.pdfFileName || "")}</div>
+        <button type="button" onclick="window.open('${result.pdfUrl}', '_blank')">PDF 열기</button>
+      `;
+    }
+
+    async function loadPdfList() {
+      try {
+        const result = await api("listPdfs", {
+          category: $("#filterCategory").value,
+          siteName: $("#filterSiteName").value.trim(),
+          date: $("#filterDate").value,
+          includeDeleted: $("#includeDeleted").value === "true"
+        });
+        renderPdfList(result.items || []);
+      } catch (error) {
+        $("#pdfList").innerHTML = `<div class="empty">${escapeHtml(error.message || "목록 조회 실패")}</div>`;
+      }
+    }
+
+    function renderPdfList(items) {
+      if (!items.length) {
+        $("#pdfList").innerHTML = `<div class="empty">조회된 사진대장이 없습니다.</div>`;
+        return;
+      }
+      $("#pdfList").innerHTML = items.map((item) => `
+        <article class="pdf-item">
+          <strong>${escapeHtml(item.createdAt || "")} · ${escapeHtml(item.category)} · ${escapeHtml(item.siteName)}</strong>
+          <div class="pdf-meta">${escapeHtml(item.pdfFileName || "")}${item.isPdfDeleted === true || item.isPdfDeleted === "true" ? " · PDF 삭제됨" : ""}</div>
+          <div class="pdf-actions">
+            <button class="small" type="button" onclick="openPdf('${item.pdfUrl || ""}')">PDF 열기</button>
+            <button class="danger small" type="button" onclick="deletePdf('${item.id}')">PDF 삭제</button>
+            <button class="secondary small" type="button" onclick="regeneratePdf('${item.id}')">PDF 재생성</button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    window.openPdf = function(url) {
+      if (!url) return toast("열 수 있는 PDF가 없습니다.");
+      window.open(url, "_blank");
+    };
+
+    window.deletePdf = async function(id) {
+      if (!confirm("사진대장 PDF만 삭제됩니다. 원본사진은 삭제되지 않습니다. 삭제하시겠습니까?")) return;
+      showLoading(true, "삭제중입니다...");
+      try {
+        await api("deletePdf", { id });
+        toast("PDF를 삭제했습니다. 원본사진은 유지됩니다.");
+        await loadPdfList();
+      } catch (error) {
+        toast(error.message || "PDF 삭제 실패");
+      } finally {
+        showLoading(false);
+      }
+    };
+
+    window.regeneratePdf = async function(id) {
+      showLoading(true, "PDF 재생성중입니다...");
+      try {
+        const result = await api("regeneratePdf", { id });
+        toast("PDF를 재생성했습니다.");
+        if (result.pdfUrl) window.open(result.pdfUrl, "_blank");
+        await loadPdfList();
+      } catch (error) {
+        toast(error.message || "PDF 재생성 실패");
+      } finally {
+        showLoading(false);
+      }
+    };
+
+    async function setupBackend() {
+      try {
+        await api("setup", {});
+        toast("시트와 Drive 폴더를 확인했습니다.");
+      } catch (error) {
+        toast(error.message || "초기화 실패");
+      }
+    }
+
+    async function api(action, payload) {
+      const url = $("#apiUrl").value.trim() || localStorage.getItem(STORAGE.apiUrl);
+      if (!url) throw new Error("설정에서 Apps Script 웹앱 URL을 입력해 주세요.");
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action, payload })
+      });
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.message || "서버 오류");
+      return data.data || {};
+    }
+
+    function saveSettings() {
+      localStorage.setItem(STORAGE.apiUrl, $("#apiUrl").value.trim());
+      saveHeaderLocal();
+      toast("설정을 저장했습니다.");
+    }
+
+    function saveHeaderLocal() {
+      localStorage.setItem(STORAGE.siteName, $("#siteName").value.trim());
+      localStorage.setItem(STORAGE.contractor, $("#contractor").value.trim());
+      localStorage.setItem(STORAGE.writer, $("#writer").value.trim());
+    }
+
+    function showLoading(show, text = "저장중입니다...") {
+      $("#loading").textContent = text;
+      $("#loading").classList.toggle("show", show);
+    }
+
+    function toast(message) {
+      const el = $("#toast");
+      el.textContent = message;
+      el.classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => el.classList.remove("show"), 2600);
+    }
+
+    function today() {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+      return d.toISOString().slice(0, 10);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+    }
+  </script>
+</body>
+</html>

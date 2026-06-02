@@ -4,5 +4,7 @@ desktop.ini
 *.tmp
 *.log
 .env
-photo-management/
 totalworksheet-repo/
+photo-management/css/
+photo-management/js/
+photo-management/gas/
