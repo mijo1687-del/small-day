@@ -124,7 +124,11 @@
 
     <section id="pdfCreateView" class="view">
       <section class="panel">
-        <div class="section-title"><h2>사진대장 생성</h2><button id="loadSavedPhotosButton" class="small" type="button">사진 불러오기</button></div>
+        <div class="section-title">
+          <h2>사진대장 생성</h2>
+          <button id="openCurrentPdfFolderTopButton" class="small secondary" type="button">PDF 폴더 열기</button>
+          <button id="loadSavedPhotosButton" class="small" type="button">사진 불러오기</button>
+        </div>
         <div class="grid four">
           <label>카테고리<select id="pdfSourceCategory"></select></label>
           <label>현장명<input id="pdfSourceSiteName" placeholder="현장명"></label>
@@ -229,6 +233,7 @@
       $("#saveButton").addEventListener("click", savePhotos);
       $("#loadSavedPhotosButton").addEventListener("click", loadSavedPhotos);
       $("#createPdfButton").addEventListener("click", createPdfFromSelected);
+      $("#openCurrentPdfFolderTopButton").addEventListener("click", openCurrentPdfFolder);
       $("#refreshFolderLinksButton").addEventListener("click", () => loadFolderLinks({ silent: false }));
       $("#pdfSourceCategory").addEventListener("change", renderFolderLinks);
       $("#searchPdfButton").addEventListener("click", loadPdfList);
@@ -434,6 +439,12 @@
     function openDriveFolder(key) {
       if (!state.folderLinks) return toast("먼저 시트/폴더 초기화 또는 새로고침을 눌러 주세요.");
       openExternal(state.folderLinks[key]);
+    }
+
+    function openCurrentPdfFolder() {
+      if (!state.folderLinks) return toast("먼저 Drive 폴더 정보 불러오기를 눌러 주세요.");
+      const category = $("#pdfSourceCategory").value || "현장시공";
+      openExternal(state.folderLinks.pdf?.[category] || state.folderLinks.pdfRoot);
     }
 
     window.openExternal = function(url) {
