@@ -48,6 +48,7 @@
     .hidden-file { display: none; }
     .photo-list { display: grid; gap: 12px; }
     .photo-card { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); }
+    .photo-card.selected { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(23,107,93,.16); }
     .photo-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #dfe8eb; }
     .photo-card .body { display: grid; gap: 10px; padding: 12px; }
     .photo-card .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -61,7 +62,7 @@
     .pdf-meta { color: var(--muted); font-size: 13px; }
     .pdf-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .status { padding: 10px 12px; border-radius: 8px; color: var(--primary-dark); background: var(--soft); font-weight: 800; }
-    .bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; grid-template-columns: repeat(3, 1fr); background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -8px 22px rgba(17,35,42,.08); }
+    .bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, 1fr); background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -8px 22px rgba(17,35,42,.08); }
     .nav-button { min-height: 68px; color: var(--muted); background: #fff; border-radius: 0; font-size: 13px; }
     .nav-button.active { color: var(--primary); background: #f1f7f5; }
     @media (min-width: 760px) {
@@ -116,8 +117,28 @@
         <div id="photoList" class="photo-list empty">사진을 선택하면 입력 카드가 표시됩니다.</div>
       </section>
 
-      <button id="saveButton" type="button">저장 및 PDF 생성</button>
+      <button id="saveButton" type="button">원본사진 저장</button>
       <section id="saveResult" class="panel result-box" hidden></section>
+    </section>
+
+    <section id="pdfCreateView" class="view">
+      <section class="panel">
+        <div class="section-title"><h2>사진대장 생성</h2><button id="loadSavedPhotosButton" class="small" type="button">사진 불러오기</button></div>
+        <div class="grid four">
+          <label>카테고리<select id="pdfSourceCategory"></select></label>
+          <label>현장명<input id="pdfSourceSiteName" placeholder="현장명"></label>
+          <label>사진 날짜<input id="pdfSourceDate" type="date"></label>
+          <label>선택수<input id="selectedPhotoCount" value="0장" readonly></label>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="section-title">
+          <h2>저장된 원본사진 선택</h2>
+          <button id="createPdfButton" type="button">선택사진 PDF 생성</button>
+        </div>
+        <div id="savedPhotoList" class="photo-list empty">날짜와 카테고리를 선택하고 사진을 불러오세요.</div>
+      </section>
+      <section id="pdfCreateResult" class="panel result-box" hidden></section>
     </section>
 
     <section id="listView" class="view">
@@ -150,6 +171,7 @@
 
   <nav class="bottom-nav">
     <button class="nav-button active" data-view="mainView">입력</button>
+    <button class="nav-button" data-view="pdfCreateView">PDF 생성</button>
     <button class="nav-button" data-view="listView">사진대장 목록</button>
     <button class="nav-button" data-view="settingsView">설정</button>
   </nav>
@@ -166,7 +188,7 @@
       contractor: "photoBook.contractor",
       writer: "photoBook.writer"
     };
-    const state = { category: "", photos: [], saving: false };
+    const state = { category: "", photos: [], savedPhotos: [], selectedPhotoIds: new Set(), saving: false };
     const $ = (selector) => document.querySelector(selector);
     const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -181,6 +203,7 @@
 
     function setDefaults() {
       $("#mainDate").value = today();
+      $("#pdfSourceDate").value = today();
       $("#siteName").value = localStorage.getItem(STORAGE.siteName) || "";
       $("#contractor").value = localStorage.getItem(STORAGE.contractor) || "";
       $("#writer").value = localStorage.getItem(STORAGE.writer) || "";
@@ -195,6 +218,8 @@
       $("#cameraInput").addEventListener("change", handleFiles);
       $("#galleryInput").addEventListener("change", handleFiles);
       $("#saveButton").addEventListener("click", savePhotos);
+      $("#loadSavedPhotosButton").addEventListener("click", loadSavedPhotos);
+      $("#createPdfButton").addEventListener("click", createPdfFromSelected);
       $("#searchPdfButton").addEventListener("click", loadPdfList);
       $("#saveSettingsButton").addEventListener("click", saveSettings);
       $("#setupButton").addEventListener("click", setupBackend);
@@ -217,6 +242,9 @@
 
     function renderCategoryOptions() {
       $("#filterCategory").innerHTML = `<option value="">전체</option>` + CATEGORIES.map((category) => `<option value="${category}">${category}</option>`).join("");
+      $("#pdfSourceCategory").innerHTML = CATEGORIES.map((category) => `<option value="${category}">${category}</option>`).join("");
+      $("#pdfSourceCategory").value = "현장시공";
+      $("#pdfSourceSiteName").value = $("#siteName").value;
     }
 
     async function handleFiles(event) {
@@ -332,7 +360,7 @@
         state.photos = [];
         renderPhotos();
         renderSaveResult(result);
-        toast("저장 및 PDF 생성이 완료되었습니다.");
+        toast("원본사진 저장이 완료되었습니다.");
       } catch (error) {
         toast(error.message || "저장에 실패했습니다.");
       } finally {
@@ -353,10 +381,85 @@
     function renderSaveResult(result) {
       $("#saveResult").hidden = false;
       $("#saveResult").innerHTML = `
-        <strong>PDF 생성 완료</strong>
-        <div class="pdf-meta">${escapeHtml(result.pdfFileName || "")}</div>
-        <button type="button" onclick="window.open('${result.pdfUrl}', '_blank')">PDF 열기</button>
+        <strong>원본사진 저장 완료</strong>
+        <div class="pdf-meta">${Number(result.count || 0)}장이 Drive 원본사진 폴더와 PhotoDB에 저장되었습니다.</div>
+        <button type="button" onclick="showView('pdfCreateView')">사진대장 생성으로 이동</button>
       `;
+    }
+
+    async function loadSavedPhotos() {
+      const category = $("#pdfSourceCategory").value;
+      const siteName = $("#pdfSourceSiteName").value.trim() || $("#siteName").value.trim();
+      const date = $("#pdfSourceDate").value || today();
+      if (!category || !siteName || !date) return toast("카테고리, 현장명, 날짜를 확인해 주세요.");
+      showLoading(true, "사진 불러오는 중입니다...");
+      try {
+        const result = await api("listPhotos", { category, siteName, date });
+        state.savedPhotos = result.items || [];
+        state.selectedPhotoIds = new Set();
+        renderSavedPhotos();
+        toast(`${state.savedPhotos.length}장의 원본사진을 불러왔습니다.`);
+      } catch (error) {
+        toast(error.message || "사진 불러오기 실패");
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function renderSavedPhotos() {
+      $("#selectedPhotoCount").value = `${state.selectedPhotoIds.size}장`;
+      if (!state.savedPhotos.length) {
+        $("#savedPhotoList").className = "photo-list empty";
+        $("#savedPhotoList").textContent = "저장된 원본사진이 없습니다.";
+        return;
+      }
+      $("#savedPhotoList").className = "photo-list";
+      $("#savedPhotoList").innerHTML = state.savedPhotos.map((photo, index) => {
+        const selected = state.selectedPhotoIds.has(photo.id);
+        return `
+          <article class="photo-card ${selected ? "selected" : ""}">
+            <img src="${photo.thumbUrl || photo.originalImageUrl}" alt="저장사진 ${index + 1}">
+            <div class="body">
+              <div class="card-head">
+                <strong>${index + 1}. ${escapeHtml(photo.category)} · ${escapeHtml(photo.date)}</strong>
+                <label style="display:flex;align-items:center;gap:6px;color:var(--text);font-size:14px;"><input type="checkbox" ${selected ? "checked" : ""} onchange="toggleSavedPhoto('${photo.id}', this.checked)"> 선택</label>
+              </div>
+              ${photo.category === "현장시공" ? `<div class="pdf-meta">공종: ${escapeHtml(photo.workType || "")} · 부위: ${escapeHtml(photo.location || "")}</div>` : ""}
+              <div class="pdf-meta">${escapeHtml(photo.content || "")}</div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    window.toggleSavedPhoto = function(id, checked) {
+      if (checked) state.selectedPhotoIds.add(id);
+      else state.selectedPhotoIds.delete(id);
+      renderSavedPhotos();
+    };
+
+    async function createPdfFromSelected() {
+      const ids = Array.from(state.selectedPhotoIds);
+      if (!ids.length) return toast("PDF에 넣을 사진을 선택해 주세요.");
+      if (!confirm("선택한 원본사진으로 사진대장 PDF를 생성하시겠습니까?")) return;
+      showLoading(true, "PDF 생성중입니다...");
+      try {
+        const result = await api("createPdfFromSelection", {
+          photoIds: ids,
+          siteName: $("#pdfSourceSiteName").value.trim() || $("#siteName").value.trim(),
+          contractor: $("#contractor").value.trim(),
+          writer: $("#writer").value.trim(),
+          category: $("#pdfSourceCategory").value
+        });
+        $("#pdfCreateResult").hidden = false;
+        $("#pdfCreateResult").innerHTML = `<strong>PDF 생성 완료</strong><div class="pdf-meta">${escapeHtml(result.pdfFileName || "")}</div><button type="button" onclick="window.open('${result.pdfUrl}', '_blank')">PDF 열기</button>`;
+        toast("PDF 생성이 완료되었습니다.");
+        if (result.pdfUrl) window.open(result.pdfUrl, "_blank");
+      } catch (error) {
+        toast(error.message || "PDF 생성 실패");
+      } finally {
+        showLoading(false);
+      }
     }
 
     async function loadPdfList() {

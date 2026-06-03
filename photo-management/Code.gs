@@ -34,6 +34,8 @@ function doPost(e) {
     let data = {};
     if (action === 'setup') data = setup();
     if (action === 'savePhotoBook') data = savePhotoBook_(payload);
+    if (action === 'listPhotos') data = listPhotos_(payload);
+    if (action === 'createPdfFromSelection') data = createPdfFromSelection_(payload);
     if (action === 'listPdfs') data = listPdfs_(payload);
     if (action === 'deletePdf') data = deletePdf_(payload.id);
     if (action === 'regeneratePdf') data = regeneratePdf_(payload.id);
@@ -89,9 +91,46 @@ function savePhotoBook_(payload) {
   });
 
   appendRows_(rows);
+  return { ids: rows.map((row) => row.id), count: rows.length };
+}
 
+function listPhotos_(filters) {
+  const rows = readRows_().filter((row) => {
+    if (filters.category && row.category !== filters.category) return false;
+    if (filters.siteName && row.siteName !== filters.siteName) return false;
+    if (filters.date && formatDate_(row.date) !== filters.date) return false;
+    if (!row.originalFileId) return false;
+    return true;
+  }).map((row) => ({
+    id: row.id,
+    siteName: row.siteName,
+    contractor: row.contractor,
+    writer: row.writer,
+    category: row.category,
+    date: formatDate_(row.date),
+    workType: row.workType,
+    location: row.location,
+    content: row.content,
+    originalImageUrl: row.originalImageUrl,
+    originalFileId: row.originalFileId,
+    thumbUrl: driveThumbUrl_(row.originalFileId),
+    createdAt: row.createdAt
+  })).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  return { items: rows };
+}
+
+function createPdfFromSelection_(payload) {
+  const ids = payload.photoIds || [];
+  if (!ids.length) throw new Error('선택된 사진이 없습니다.');
+  const rows = readRows_().filter((row) => ids.includes(row.id));
+  if (!rows.length) throw new Error('선택한 원본사진 기록을 찾을 수 없습니다.');
   try {
-    const pdf = createPdfForRows_(rows, payload);
+    const pdf = createPdfForRows_(rows, {
+      category: payload.category || rows[0].category,
+      siteName: payload.siteName || rows[0].siteName,
+      contractor: payload.contractor || rows[0].contractor,
+      writer: payload.writer || rows[0].writer
+    });
     updateRowsByIds_(rows.map((row) => row.id), {
       pdfUrl: pdf.url,
       pdfFileId: pdf.id,
@@ -99,21 +138,10 @@ function savePhotoBook_(payload) {
       deletedAt: '',
       errorMessage: ''
     });
-    return {
-      ids: rows.map((row) => row.id),
-      pdfUrl: pdf.url,
-      pdfFileId: pdf.id,
-      pdfFileName: pdf.name
-    };
+    return { pdfUrl: pdf.url, pdfFileId: pdf.id, pdfFileName: pdf.name };
   } catch (error) {
     updateRowsByIds_(rows.map((row) => row.id), { errorMessage: error.message || String(error) });
-    return {
-      ids: rows.map((row) => row.id),
-      pdfUrl: '',
-      pdfFileId: '',
-      pdfFileName: '',
-      errorMessage: error.message || String(error)
-    };
+    throw error;
   }
 }
 
@@ -250,6 +278,10 @@ function photoBlock_(row, category) {
 function imageDataUrl_(fileId) {
   const blob = DriveApp.getFileById(fileId).getBlob();
   return `data:${blob.getContentType()};base64,${Utilities.base64Encode(blob.getBytes())}`;
+}
+
+function driveThumbUrl_(fileId) {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
 }
 
 function validatePayload_(payload) {
