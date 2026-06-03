@@ -126,7 +126,6 @@
       <section class="panel">
         <div class="section-title">
           <h2>사진대장 생성</h2>
-          <button id="openCurrentPdfFolderTopButton" class="small secondary" type="button">PDF 폴더 열기</button>
           <button id="loadSavedPhotosButton" class="small" type="button">사진 불러오기</button>
         </div>
         <div class="grid four">
@@ -134,12 +133,6 @@
           <label>현장명<input id="pdfSourceSiteName" placeholder="현장명"></label>
           <label>사진 날짜<input id="pdfSourceDate" type="date"></label>
           <label>선택수<input id="selectedPhotoCount" value="0장" readonly></label>
-        </div>
-      </section>
-      <section class="panel result-box">
-        <div class="section-title"><h2>Drive 바로가기</h2><button id="refreshFolderLinksButton" class="small secondary" type="button">새로고침</button></div>
-        <div id="folderLinks" class="link-grid">
-          <button class="secondary" type="button" disabled>폴더 정보를 불러오세요</button>
         </div>
       </section>
       <section class="panel">
@@ -150,6 +143,12 @@
         <div id="savedPhotoList" class="photo-list empty">날짜와 카테고리를 선택하고 사진을 불러오세요.</div>
       </section>
       <section id="pdfCreateResult" class="panel result-box" hidden></section>
+      <section class="panel result-box">
+        <div class="section-title"><h2>Drive 바로가기</h2><button id="refreshFolderLinksButton" class="small secondary" type="button">새로고침</button></div>
+        <div id="folderLinks" class="link-grid">
+          <button class="secondary" type="button" disabled>폴더 정보를 불러오세요</button>
+        </div>
+      </section>
     </section>
 
     <section id="listView" class="view">
@@ -175,7 +174,6 @@
         <div class="section-title"><h2>기준정보 설정</h2><button id="saveSettingsButton" class="small" type="button">저장</button></div>
         <label>Google Apps Script 웹앱 URL<input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec"></label>
         <button id="setupButton" class="secondary" type="button">시트/폴더 초기화</button>
-        <button id="openPdfRootButton" type="button">사진대장PDF 폴더 열기</button>
         <p class="status">GitHub Pages에서 사용하려면 Apps Script 웹앱 URL을 저장하세요.</p>
       </section>
     </section>
@@ -233,13 +231,11 @@
       $("#saveButton").addEventListener("click", savePhotos);
       $("#loadSavedPhotosButton").addEventListener("click", loadSavedPhotos);
       $("#createPdfButton").addEventListener("click", createPdfFromSelected);
-      $("#openCurrentPdfFolderTopButton").addEventListener("click", openCurrentPdfFolder);
       $("#refreshFolderLinksButton").addEventListener("click", () => loadFolderLinks({ silent: false }));
       $("#pdfSourceCategory").addEventListener("change", renderFolderLinks);
       $("#searchPdfButton").addEventListener("click", loadPdfList);
       $("#saveSettingsButton").addEventListener("click", saveSettings);
       $("#setupButton").addEventListener("click", setupBackend);
-      $("#openPdfRootButton").addEventListener("click", () => openDriveFolder("pdfRoot"));
       ["siteName", "contractor", "writer"].forEach((id) => $("#" + id).addEventListener("change", saveHeaderLocal));
     }
 
@@ -420,32 +416,17 @@
     }
 
     function renderFolderLinks() {
-      const category = $("#pdfSourceCategory")?.value || "현장시공";
       if (!state.folderLinks) {
         $("#folderLinks").innerHTML = `<button class="secondary" type="button" onclick="loadFolderLinks()">Drive 폴더 정보 불러오기</button>`;
         return;
       }
-      const pdfCategoryUrl = state.folderLinks.pdf?.[category] || state.folderLinks.pdfRoot;
-      const originalCategoryUrl = state.folderLinks.original?.[category] || state.folderLinks.originalRoot;
       $("#folderLinks").innerHTML = `
-        <button type="button" onclick="openExternal('${state.folderLinks.pdfRoot || ""}')">사진대장PDF 전체</button>
-        <button class="secondary" type="button" onclick="openExternal('${pdfCategoryUrl || ""}')">${escapeHtml(category)} PDF 폴더</button>
-        <button class="secondary" type="button" onclick="openExternal('${originalCategoryUrl || ""}')">${escapeHtml(category)} 원본사진</button>
+        <button class="secondary" type="button" onclick="openExternal('${state.folderLinks.originalRoot || ""}')">원본사진 폴더</button>
+        <button type="button" onclick="openExternal('${state.folderLinks.pdfRoot || ""}')">PDF사진대장 폴더</button>
       `;
     }
 
     window.loadFolderLinks = loadFolderLinks;
-
-    function openDriveFolder(key) {
-      if (!state.folderLinks) return toast("먼저 시트/폴더 초기화 또는 새로고침을 눌러 주세요.");
-      openExternal(state.folderLinks[key]);
-    }
-
-    function openCurrentPdfFolder() {
-      if (!state.folderLinks) return toast("먼저 Drive 폴더 정보 불러오기를 눌러 주세요.");
-      const category = $("#pdfSourceCategory").value || "현장시공";
-      openExternal(state.folderLinks.pdf?.[category] || state.folderLinks.pdfRoot);
-    }
 
     window.openExternal = function(url) {
       if (!url) return toast("열 수 있는 폴더 주소가 없습니다.");
