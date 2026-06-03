@@ -214,7 +214,7 @@
       writer: "photoBook.writer",
       historyPrefix: "photoBook.history."
     };
-    const state = { category: "", photos: [], savedPhotos: [], selectedPhotoIds: new Set(), folderLinks: null, saving: false };
+    const state = { category: "", photos: [], savedPhotos: [], selectedPhotoIds: new Set(), folderLinks: null, recentValues: {}, saving: false };
     const $ = (selector) => document.querySelector(selector);
     const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -226,6 +226,7 @@
       renderCategoryOptions();
       renderPhotos();
       loadFolderLinks({ silent: true });
+      loadRecentValues({ silent: true });
     }
 
     function setDefaults() {
@@ -328,13 +329,13 @@
             ${isBuild ? `
               <label>공종
                 <div class="suggest-wrap">
-                  <input value="${escapeHtml(photo.workType)}" onfocus="renderPhotoSuggestions('${photo.id}', 'workType', this.value)" oninput="updatePhoto('${photo.id}', 'workType', this.value); renderPhotoSuggestions('${photo.id}', 'workType', this.value)" placeholder="예: 미장공사">
+                  <input value="${escapeHtml(photo.workType)}" onfocus="renderPhotoSuggestions('${photo.id}', 'workType', this.value)" oninput="updatePhoto('${photo.id}', 'workType', this.value); renderPhotoSuggestions('${photo.id}', 'workType', this.value)" onchange="addHistory('workType', this.value)" placeholder="예: 미장공사">
                   <div id="${suggestionBoxId(photo.id, 'workType')}" class="suggest-list"></div>
                 </div>
               </label>
               <label>부위
                 <div class="suggest-wrap">
-                  <input value="${escapeHtml(photo.location)}" onfocus="renderPhotoSuggestions('${photo.id}', 'location', this.value)" oninput="updatePhoto('${photo.id}', 'location', this.value); renderPhotoSuggestions('${photo.id}', 'location', this.value)" placeholder="예: 1층 복도">
+                  <input value="${escapeHtml(photo.location)}" onfocus="renderPhotoSuggestions('${photo.id}', 'location', this.value)" oninput="updatePhoto('${photo.id}', 'location', this.value); renderPhotoSuggestions('${photo.id}', 'location', this.value)" onchange="addHistory('location', this.value)" placeholder="예: 1층 복도">
                   <div id="${suggestionBoxId(photo.id, 'location')}" class="suggest-list"></div>
                 </div>
               </label>
@@ -342,7 +343,7 @@
             <label>일시<input type="date" value="${photo.date}" onchange="updatePhoto('${photo.id}', 'date', this.value)"></label>
             <label>내용
               <div class="suggest-wrap">
-                <textarea rows="2" onfocus="renderPhotoSuggestions('${photo.id}', 'content', this.value)" oninput="updatePhoto('${photo.id}', 'content', this.value); renderPhotoSuggestions('${photo.id}', 'content', this.value)" placeholder="내용을 입력하세요">${escapeHtml(photo.content)}</textarea>
+                <textarea rows="2" onfocus="renderPhotoSuggestions('${photo.id}', 'content', this.value)" oninput="updatePhoto('${photo.id}', 'content', this.value); renderPhotoSuggestions('${photo.id}', 'content', this.value)" onchange="addHistory('content', this.value)" placeholder="내용을 입력하세요">${escapeHtml(photo.content)}</textarea>
                 <div id="${suggestionBoxId(photo.id, 'content')}" class="suggest-list"></div>
               </div>
             </label>
@@ -404,6 +405,7 @@
         };
         const result = await api("savePhotoBook", payload);
         rememberSaveValues(payload);
+        loadRecentValues({ silent: true });
         state.photos = [];
         renderPhotos();
         renderSaveResult(result);
@@ -445,6 +447,20 @@
         if (!options.silent) toast("Drive 폴더 바로가기를 불러왔습니다.");
       } catch (error) {
         if (!options.silent) toast(error.message || "폴더 바로가기 불러오기 실패");
+      }
+    }
+
+    async function loadRecentValues(options = {}) {
+      const hasUrl = ($("#apiUrl").value.trim() || localStorage.getItem(STORAGE.apiUrl));
+      if (!hasUrl) return;
+      try {
+        const result = await api("getRecentValues", {});
+        state.recentValues = result || {};
+        Object.keys(state.recentValues).forEach((key) => {
+          (state.recentValues[key] || []).forEach((value) => addHistory(key, value));
+        });
+      } catch (error) {
+        if (!options.silent) toast(error.message || "추천값 불러오기 실패");
       }
     }
 
@@ -635,6 +651,7 @@
       localStorage.setItem(STORAGE.apiUrl, $("#apiUrl").value.trim());
       saveHeaderLocal();
       loadFolderLinks({ silent: true });
+      loadRecentValues({ silent: true });
       toast("설정을 저장했습니다.");
     }
 
@@ -688,7 +705,9 @@
 
     function getHistory(key) {
       try {
-        return JSON.parse(localStorage.getItem(STORAGE.historyPrefix + key) || "[]").filter(Boolean);
+        const local = JSON.parse(localStorage.getItem(STORAGE.historyPrefix + key) || "[]").filter(Boolean);
+        const remote = state.recentValues[key] || [];
+        return Array.from(new Set([...local, ...remote].map((value) => String(value || "").trim()).filter(Boolean)));
       } catch (error) {
         return [];
       }
@@ -741,7 +760,9 @@
     };
 
     window.deleteSuggestion = function(boxId, key, encoded) {
-      removeHistory(key, decodeURIComponent(encoded));
+      const value = decodeURIComponent(encoded);
+      removeHistory(key, value);
+      state.recentValues[key] = (state.recentValues[key] || []).filter((item) => item !== value);
       const box = $("#" + cssEscape(boxId));
       if (box) box.innerHTML = "";
     };

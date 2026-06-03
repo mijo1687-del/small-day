@@ -34,6 +34,7 @@ function doPost(e) {
     let data = {};
     if (action === 'setup') data = setup();
     if (action === 'getFolderLinks') data = getFolderLinks_();
+    if (action === 'getRecentValues') data = getRecentValues_();
     if (action === 'savePhotoBook') data = savePhotoBook_(payload);
     if (action === 'listPhotos') data = listPhotos_(payload);
     if (action === 'createPdfFromSelection') data = createPdfFromSelection_(payload);
@@ -117,6 +118,27 @@ function listPhotos_(filters) {
     createdAt: row.createdAt
   })).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   return { items: rows };
+}
+
+function getRecentValues_() {
+  const recent = {
+    contractor: [],
+    writer: [],
+    workType: [],
+    location: [],
+    content: []
+  };
+  const seen = {};
+  Object.keys(recent).forEach((key) => seen[key] = {});
+  readRows_().reverse().forEach((row) => {
+    Object.keys(recent).forEach((key) => {
+      const value = String(row[key] || '').trim();
+      if (!value || seen[key][value]) return;
+      seen[key][value] = true;
+      if (recent[key].length < 50) recent[key].push(value);
+    });
+  });
+  return recent;
 }
 
 function createPdfFromSelection_(payload) {
