@@ -42,7 +42,12 @@
     textarea { min-height: 78px; resize: vertical; }
     input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(23, 107, 93, .14); }
     .category-grid, .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .category-button.active { background: var(--primary-dark); }
+    .category-button.active { background: #111; color: #fff; box-shadow: 0 0 0 3px rgba(0,0,0,.18); }
+    .suggest-wrap { display: grid; gap: 6px; }
+    .suggest-list { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+    .suggest-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 34px; padding: 0 6px 0 10px; border: 1px solid #b9c8cc; border-radius: 8px; color: var(--text); background: #fff; font-size: 13px; font-weight: 800; }
+    .suggest-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .suggest-chip .x { min-width: 26px; min-height: 26px; padding: 0; border-radius: 6px; color: var(--danger); background: #fff3f1; border: 1px solid #efc5bf; font-size: 13px; }
     .view { display: none; }
     .view.active { display: grid; gap: 12px; }
     .hidden-file { display: none; }
@@ -87,8 +92,18 @@
       <section class="panel grid">
         <div class="grid two">
           <label>현장명<input id="siteName" placeholder="현장명"></label>
-          <label>시공사<input id="contractor" placeholder="시공사"></label>
-          <label>작성자<input id="writer" placeholder="작성자"></label>
+          <label>시공사
+            <div class="suggest-wrap">
+              <input id="contractor" placeholder="시공사">
+              <div id="contractorSuggestions" class="suggest-list"></div>
+            </div>
+          </label>
+          <label>작성자
+            <div class="suggest-wrap">
+              <input id="writer" placeholder="작성자">
+              <div id="writerSuggestions" class="suggest-list"></div>
+            </div>
+          </label>
           <label>작성일<input id="mainDate" type="date"></label>
         </div>
       </section>
@@ -196,7 +211,8 @@
       apiUrl: "photoBook.apiUrl",
       siteName: "photoBook.siteName",
       contractor: "photoBook.contractor",
-      writer: "photoBook.writer"
+      writer: "photoBook.writer",
+      historyPrefix: "photoBook.history."
     };
     const state = { category: "", photos: [], savedPhotos: [], selectedPhotoIds: new Set(), folderLinks: null, saving: false };
     const $ = (selector) => document.querySelector(selector);
@@ -237,6 +253,7 @@
       $("#saveSettingsButton").addEventListener("click", saveSettings);
       $("#setupButton").addEventListener("click", setupBackend);
       ["siteName", "contractor", "writer"].forEach((id) => $("#" + id).addEventListener("change", saveHeaderLocal));
+      bindHeaderSuggestions();
     }
 
     function showView(viewId) {
@@ -309,11 +326,26 @@
               <button class="danger small" type="button" onclick="removePhoto('${photo.id}')">삭제</button>
             </div>
             ${isBuild ? `
-              <label>공종<input value="${escapeHtml(photo.workType)}" oninput="updatePhoto('${photo.id}', 'workType', this.value)" placeholder="예: 미장공사"></label>
-              <label>부위<input value="${escapeHtml(photo.location)}" oninput="updatePhoto('${photo.id}', 'location', this.value)" placeholder="예: 1층 복도"></label>
+              <label>공종
+                <div class="suggest-wrap">
+                  <input value="${escapeHtml(photo.workType)}" onfocus="renderPhotoSuggestions('${photo.id}', 'workType', this.value)" oninput="updatePhoto('${photo.id}', 'workType', this.value); renderPhotoSuggestions('${photo.id}', 'workType', this.value)" placeholder="예: 미장공사">
+                  <div id="${suggestionBoxId(photo.id, 'workType')}" class="suggest-list"></div>
+                </div>
+              </label>
+              <label>부위
+                <div class="suggest-wrap">
+                  <input value="${escapeHtml(photo.location)}" onfocus="renderPhotoSuggestions('${photo.id}', 'location', this.value)" oninput="updatePhoto('${photo.id}', 'location', this.value); renderPhotoSuggestions('${photo.id}', 'location', this.value)" placeholder="예: 1층 복도">
+                  <div id="${suggestionBoxId(photo.id, 'location')}" class="suggest-list"></div>
+                </div>
+              </label>
             ` : ""}
             <label>일시<input type="date" value="${photo.date}" onchange="updatePhoto('${photo.id}', 'date', this.value)"></label>
-            <label>내용<textarea rows="2" oninput="updatePhoto('${photo.id}', 'content', this.value)" placeholder="내용을 입력하세요">${escapeHtml(photo.content)}</textarea></label>
+            <label>내용
+              <div class="suggest-wrap">
+                <textarea rows="2" onfocus="renderPhotoSuggestions('${photo.id}', 'content', this.value)" oninput="updatePhoto('${photo.id}', 'content', this.value); renderPhotoSuggestions('${photo.id}', 'content', this.value)" placeholder="내용을 입력하세요">${escapeHtml(photo.content)}</textarea>
+                <div id="${suggestionBoxId(photo.id, 'content')}" class="suggest-list"></div>
+              </div>
+            </label>
           </div>
         </article>
       `;
@@ -371,6 +403,7 @@
           }))
         };
         const result = await api("savePhotoBook", payload);
+        rememberSaveValues(payload);
         state.photos = [];
         renderPhotos();
         renderSaveResult(result);
@@ -609,6 +642,113 @@
       localStorage.setItem(STORAGE.siteName, $("#siteName").value.trim());
       localStorage.setItem(STORAGE.contractor, $("#contractor").value.trim());
       localStorage.setItem(STORAGE.writer, $("#writer").value.trim());
+      addHistory("contractor", $("#contractor").value.trim());
+      addHistory("writer", $("#writer").value.trim());
+    }
+
+    function bindHeaderSuggestions() {
+      [
+        { input: "contractor", box: "contractorSuggestions", key: "contractor" },
+        { input: "writer", box: "writerSuggestions", key: "writer" }
+      ].forEach((item) => {
+        const input = $("#" + item.input);
+        input.addEventListener("focus", () => renderHeaderSuggestions(item.key, item.input, item.box));
+        input.addEventListener("input", () => renderHeaderSuggestions(item.key, item.input, item.box));
+        input.addEventListener("change", () => addHistory(item.key, input.value.trim()));
+      });
+    }
+
+    function renderHeaderSuggestions(key, inputId, boxId) {
+      const input = $("#" + inputId);
+      renderSuggestions(boxId, key, input.value, (value) => {
+        input.value = value;
+        addHistory(key, value);
+        saveHeaderLocal();
+        renderHeaderSuggestions(key, inputId, boxId);
+      });
+    }
+
+    function rememberSaveValues(payload) {
+      addHistory("contractor", payload.contractor);
+      addHistory("writer", payload.writer);
+      payload.photos.forEach((photo) => {
+        addHistory("workType", photo.workType);
+        addHistory("location", photo.location);
+        addHistory("content", photo.content);
+      });
+    }
+
+    function addHistory(key, value) {
+      const clean = String(value || "").trim();
+      if (!clean) return;
+      const values = getHistory(key).filter((item) => item !== clean);
+      values.unshift(clean);
+      localStorage.setItem(STORAGE.historyPrefix + key, JSON.stringify(values.slice(0, 30)));
+    }
+
+    function getHistory(key) {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE.historyPrefix + key) || "[]").filter(Boolean);
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function removeHistory(key, value) {
+      const values = getHistory(key).filter((item) => item !== value);
+      localStorage.setItem(STORAGE.historyPrefix + key, JSON.stringify(values));
+    }
+
+    function suggestionBoxId(photoId, key) {
+      return `suggest-${photoId}-${key}`;
+    }
+
+    window.renderPhotoSuggestions = function(photoId, key, filter = "") {
+      renderSuggestions(suggestionBoxId(photoId, key), key, filter, (value) => {
+        const photo = state.photos.find((item) => item.id === photoId);
+        if (photo) photo[key] = value;
+        renderPhotos();
+      });
+    };
+
+    function renderSuggestions(boxId, key, filter, onPick) {
+      const box = $("#" + cssEscape(boxId));
+      if (!box) return;
+      const keyword = String(filter || "").trim();
+      const values = getHistory(key)
+        .filter((value) => !keyword || value.toLowerCase().startsWith(keyword.toLowerCase()))
+        .slice(0, 8);
+      if (!values.length) {
+        box.innerHTML = "";
+        return;
+      }
+      box.innerHTML = values.map((value) => {
+        const encoded = encodeURIComponent(value);
+        return `
+          <div class="suggest-chip" role="button" tabindex="0" onclick="pickSuggestion('${boxId}', '${key}', '${encoded}')">
+            <span>${escapeHtml(value)}</span>
+            <button class="x" type="button" onclick="event.stopPropagation(); deleteSuggestion('${boxId}', '${key}', '${encoded}')">X</button>
+          </div>
+        `;
+      }).join("");
+      box._onPick = onPick;
+    }
+
+    window.pickSuggestion = function(boxId, key, encoded) {
+      const value = decodeURIComponent(encoded);
+      const box = $("#" + cssEscape(boxId));
+      if (box?._onPick) box._onPick(value);
+    };
+
+    window.deleteSuggestion = function(boxId, key, encoded) {
+      removeHistory(key, decodeURIComponent(encoded));
+      const box = $("#" + cssEscape(boxId));
+      if (box) box.innerHTML = "";
+    };
+
+    function cssEscape(value) {
+      if (window.CSS && CSS.escape) return CSS.escape(value);
+      return String(value).replace(/([ !"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, "\\$1");
     }
 
     function showLoading(show, text = "저장중입니다...") {
