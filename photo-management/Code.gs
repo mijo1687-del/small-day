@@ -33,6 +33,7 @@ function doPost(e) {
     setup();
     let data = {};
     if (action === 'setup') data = setup();
+    if (action === 'getFolderLinks') data = getFolderLinks_();
     if (action === 'savePhotoBook') data = savePhotoBook_(payload);
     if (action === 'listPhotos') data = listPhotos_(payload);
     if (action === 'createPdfFromSelection') data = createPdfFromSelection_(payload);
@@ -50,8 +51,7 @@ function setup() {
   const ss = SpreadsheetApp.getActive();
   const sheet = ss.getSheetByName(PHOTO_DB_SHEET) || ss.insertSheet(PHOTO_DB_SHEET);
   ensureHeaders_(sheet, HEADERS);
-  getFolderStructure_();
-  return { status: 'ok' };
+  return { status: 'ok', folders: getFolderLinks_() };
 }
 
 function savePhotoBook_(payload) {
@@ -284,6 +284,23 @@ function driveThumbUrl_(fileId) {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
 }
 
+function getFolderLinks_() {
+  const folders = getFolderStructure_();
+  const original = {};
+  const pdf = {};
+  CATEGORIES.forEach((category) => {
+    original[category] = folders.original[category].getUrl();
+    pdf[category] = folders.pdf[category].getUrl();
+  });
+  return {
+    root: folders.root.getUrl(),
+    originalRoot: folders.originalRoot.getUrl(),
+    pdfRoot: folders.pdfRoot.getUrl(),
+    original,
+    pdf
+  };
+}
+
 function validatePayload_(payload) {
   if (!payload.siteName) throw new Error('현장명이 필요합니다.');
   if (!payload.contractor) throw new Error('시공사가 필요합니다.');
@@ -302,7 +319,7 @@ function getFolderStructure_() {
     original[category] = getOrCreateFolder_(originalRoot, category);
     pdf[category] = getOrCreateFolder_(pdfRoot, category);
   });
-  return { root, original, pdf };
+  return { root, originalRoot, pdfRoot, original, pdf };
 }
 
 function getOrCreateFolder_(parent, name) {

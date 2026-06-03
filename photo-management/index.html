@@ -61,6 +61,7 @@
     .pdf-item { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; }
     .pdf-meta { color: var(--muted); font-size: 13px; }
     .pdf-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .link-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .status { padding: 10px 12px; border-radius: 8px; color: var(--primary-dark); background: var(--soft); font-weight: 800; }
     .bottom-nav { position: fixed; right: 0; bottom: 0; left: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, 1fr); background: #fff; border-top: 1px solid var(--line); box-shadow: 0 -8px 22px rgba(17,35,42,.08); }
     .nav-button { min-height: 68px; color: var(--muted); background: #fff; border-radius: 0; font-size: 13px; }
@@ -70,7 +71,7 @@
       .category-grid { grid-template-columns: repeat(4, 1fr); }
     }
     @media (max-width: 520px) {
-      .grid.two, .grid.four, .action-grid, .pdf-actions { grid-template-columns: 1fr; }
+      .grid.two, .grid.four, .action-grid, .pdf-actions, .link-grid { grid-template-columns: 1fr; }
       .section-title { align-items: stretch; flex-direction: column; }
     }
   </style>
@@ -131,6 +132,12 @@
           <label>선택수<input id="selectedPhotoCount" value="0장" readonly></label>
         </div>
       </section>
+      <section class="panel result-box">
+        <div class="section-title"><h2>Drive 바로가기</h2><button id="refreshFolderLinksButton" class="small secondary" type="button">새로고침</button></div>
+        <div id="folderLinks" class="link-grid">
+          <button class="secondary" type="button" disabled>폴더 정보를 불러오세요</button>
+        </div>
+      </section>
       <section class="panel">
         <div class="section-title">
           <h2>저장된 원본사진 선택</h2>
@@ -164,6 +171,7 @@
         <div class="section-title"><h2>기준정보 설정</h2><button id="saveSettingsButton" class="small" type="button">저장</button></div>
         <label>Google Apps Script 웹앱 URL<input id="apiUrl" placeholder="https://script.google.com/macros/s/.../exec"></label>
         <button id="setupButton" class="secondary" type="button">시트/폴더 초기화</button>
+        <button id="openPdfRootButton" type="button">사진대장PDF 폴더 열기</button>
         <p class="status">GitHub Pages에서 사용하려면 Apps Script 웹앱 URL을 저장하세요.</p>
       </section>
     </section>
@@ -188,7 +196,7 @@
       contractor: "photoBook.contractor",
       writer: "photoBook.writer"
     };
-    const state = { category: "", photos: [], savedPhotos: [], selectedPhotoIds: new Set(), saving: false };
+    const state = { category: "", photos: [], savedPhotos: [], selectedPhotoIds: new Set(), folderLinks: null, saving: false };
     const $ = (selector) => document.querySelector(selector);
     const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -199,6 +207,7 @@
       bindEvents();
       renderCategoryOptions();
       renderPhotos();
+      loadFolderLinks({ silent: true });
     }
 
     function setDefaults() {
@@ -220,9 +229,12 @@
       $("#saveButton").addEventListener("click", savePhotos);
       $("#loadSavedPhotosButton").addEventListener("click", loadSavedPhotos);
       $("#createPdfButton").addEventListener("click", createPdfFromSelected);
+      $("#refreshFolderLinksButton").addEventListener("click", () => loadFolderLinks({ silent: false }));
+      $("#pdfSourceCategory").addEventListener("change", renderFolderLinks);
       $("#searchPdfButton").addEventListener("click", loadPdfList);
       $("#saveSettingsButton").addEventListener("click", saveSettings);
       $("#setupButton").addEventListener("click", setupBackend);
+      $("#openPdfRootButton").addEventListener("click", () => openDriveFolder("pdfRoot"));
       ["siteName", "contractor", "writer"].forEach((id) => $("#" + id).addEventListener("change", saveHeaderLocal));
     }
 
@@ -245,6 +257,7 @@
       $("#pdfSourceCategory").innerHTML = CATEGORIES.map((category) => `<option value="${category}">${category}</option>`).join("");
       $("#pdfSourceCategory").value = "현장시공";
       $("#pdfSourceSiteName").value = $("#siteName").value;
+      renderFolderLinks();
     }
 
     async function handleFiles(event) {
@@ -385,7 +398,48 @@
         <div class="pdf-meta">${Number(result.count || 0)}장이 Drive 원본사진 폴더와 PhotoDB에 저장되었습니다.</div>
         <button type="button" onclick="showView('pdfCreateView')">사진대장 생성으로 이동</button>
       `;
+      loadFolderLinks({ silent: true });
     }
+
+    async function loadFolderLinks(options = {}) {
+      const hasUrl = ($("#apiUrl").value.trim() || localStorage.getItem(STORAGE.apiUrl));
+      if (!hasUrl) return;
+      try {
+        const result = await api("getFolderLinks", {});
+        state.folderLinks = result;
+        renderFolderLinks();
+        if (!options.silent) toast("Drive 폴더 바로가기를 불러왔습니다.");
+      } catch (error) {
+        if (!options.silent) toast(error.message || "폴더 바로가기 불러오기 실패");
+      }
+    }
+
+    function renderFolderLinks() {
+      const category = $("#pdfSourceCategory")?.value || "현장시공";
+      if (!state.folderLinks) {
+        $("#folderLinks").innerHTML = `<button class="secondary" type="button" onclick="loadFolderLinks()">Drive 폴더 정보 불러오기</button>`;
+        return;
+      }
+      const pdfCategoryUrl = state.folderLinks.pdf?.[category] || state.folderLinks.pdfRoot;
+      const originalCategoryUrl = state.folderLinks.original?.[category] || state.folderLinks.originalRoot;
+      $("#folderLinks").innerHTML = `
+        <button type="button" onclick="openExternal('${state.folderLinks.pdfRoot || ""}')">사진대장PDF 전체</button>
+        <button class="secondary" type="button" onclick="openExternal('${pdfCategoryUrl || ""}')">${escapeHtml(category)} PDF 폴더</button>
+        <button class="secondary" type="button" onclick="openExternal('${originalCategoryUrl || ""}')">${escapeHtml(category)} 원본사진</button>
+      `;
+    }
+
+    window.loadFolderLinks = loadFolderLinks;
+
+    function openDriveFolder(key) {
+      if (!state.folderLinks) return toast("먼저 시트/폴더 초기화 또는 새로고침을 눌러 주세요.");
+      openExternal(state.folderLinks[key]);
+    }
+
+    window.openExternal = function(url) {
+      if (!url) return toast("열 수 있는 폴더 주소가 없습니다.");
+      window.open(url, "_blank");
+    };
 
     async function loadSavedPhotos() {
       const category = $("#pdfSourceCategory").value;
@@ -452,7 +506,8 @@
           category: $("#pdfSourceCategory").value
         });
         $("#pdfCreateResult").hidden = false;
-        $("#pdfCreateResult").innerHTML = `<strong>PDF 생성 완료</strong><div class="pdf-meta">${escapeHtml(result.pdfFileName || "")}</div><button type="button" onclick="window.open('${result.pdfUrl}', '_blank')">PDF 열기</button>`;
+        const folderUrl = state.folderLinks?.pdf?.[$("#pdfSourceCategory").value] || state.folderLinks?.pdfRoot || "";
+        $("#pdfCreateResult").innerHTML = `<strong>PDF 생성 완료</strong><div class="pdf-meta">${escapeHtml(result.pdfFileName || "")}</div><button type="button" onclick="window.open('${result.pdfUrl}', '_blank')">PDF 열기</button><button class="secondary" type="button" onclick="openExternal('${folderUrl}')">사진대장 폴더 열기</button>`;
         toast("PDF 생성이 완료되었습니다.");
         if (result.pdfUrl) window.open(result.pdfUrl, "_blank");
       } catch (error) {
@@ -529,7 +584,9 @@
 
     async function setupBackend() {
       try {
-        await api("setup", {});
+        const result = await api("setup", {});
+        state.folderLinks = result.folders || null;
+        renderFolderLinks();
         toast("시트와 Drive 폴더를 확인했습니다.");
       } catch (error) {
         toast(error.message || "초기화 실패");
@@ -552,6 +609,7 @@
     function saveSettings() {
       localStorage.setItem(STORAGE.apiUrl, $("#apiUrl").value.trim());
       saveHeaderLocal();
+      loadFolderLinks({ silent: true });
       toast("설정을 저장했습니다.");
     }
 
